@@ -3,7 +3,8 @@ from datetime import datetime
 from django.db.models import Count
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView
@@ -16,10 +17,9 @@ POSTS_ON_PAGE_COUNT = 10
 
 
 def get_post_filter():
-    cur_time = datetime.now()
     return Post.objects.all().filter(is_published=True,
                                      category__is_published=True,
-                                     pub_date__lte=cur_time)
+                                     pub_date__lte=datetime.now())
 
 
 class PostPaginateMixin:
@@ -31,10 +31,15 @@ class ProfileListView(PostPaginateMixin, ListView):
     template_name = 'blog/profile.html'
 
     def get_queryset(self):
-        post = Post.objects.filter(author__username=self.kwargs.get('username')
-                                   ).annotate(comment_count=Count('comments')
-                                              ).order_by('-pub_date')
-        return post
+        if str(self.request.user) == self.kwargs.get('username'):
+            return Post.objects.filter(author__username=self.kwargs.get(
+                'username')).annotate(comment_count=Count('comments')
+                                      ).order_by('-pub_date')
+        else:
+            return get_post_filter().filter(
+                author__username=self.kwargs.get(
+                    'username')).annotate(comment_count=Count('comments')
+                                          ).order_by('-pub_date')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -123,11 +128,9 @@ class PostDetailView(DetailView):
         if instance.author == request.user:
             return super().dispatch(request, *args, **kwargs)
         else:
-            instance = get_object_or_404(Post,
-                                         pk=kwargs['pk'],
-                                         is_published=True,
-                                         category__is_published=True,
-                                         pub_date__lte=datetime.now())
+            instance = get_post_filter().filter(pk=kwargs['pk'])
+            if not instance:
+                raise Http404
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -168,12 +171,9 @@ class CommentCreateView(LoginRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class CommentFieldsMixin:
+class CommentUpdateDeleteMixin(LoginRequiredMixin):
     model = Comment
     fields = ('text', )
-
-
-class CommentUpdateView(CommentFieldsMixin, LoginRequiredMixin, UpdateView):
     template_name = 'blog/comment.html'
 
     def get_object(self, queryset=None):
@@ -187,49 +187,9 @@ class CommentUpdateView(CommentFieldsMixin, LoginRequiredMixin, UpdateView):
                        kwargs={'pk': self.kwargs.get('pk')})
 
 
-class CommentDeleteView(CommentFieldsMixin, LoginRequiredMixin, DeleteView):
-    template_name = 'blog/comment.html'
-
-    def get_object(self, queryset=None):
-        comment = get_object_or_404(Comment,
-                                    pk=self.kwargs.get('comment_pk'),
-                                    author=self.request.user)
-        return comment
-
-    def get_success_url(self):
-        return reverse('blog:post_detail',
-                       kwargs={'pk': self.kwargs.get('pk')})
+class CommentUpdateView(CommentUpdateDeleteMixin, UpdateView):
+    pass
 
 
-def csrf_failure(request, reason=''):
-    return render(request, 'pages/403csrf.html', status=403)
-
-
-def page_not_found(request, exception):
-    return render(request, 'pages/404.html', status=404)
-
-
-def internal_server(request):
-    return render(request, 'pages/500.html', status=500)
-
-
-# @login_required
-# def create_post(request):
-#     form = PostCreateForm(request.POST or None, files=request.FILES or None)
-#     if form.is_valid():
-#         create_post = form.save(commit=False)
-#         create_post.author = request.user
-#         create_post.save()
-#         return redirect('blog:profile', username=request.user.username)
-#     return render(request, 'blog/create.html', context={'form': form})
-
-# @login_required
-# def add_comment(request, pk):
-#     post = get_object_or_404(Post, pk=pk)
-#     form = CommentCreateForm(request.POST or None)
-#     if form.is_valid():
-#         comment = form.save(commit=False)
-#         comment.author = request.user
-#         comment.post = post
-#         comment.save()
-#     return redirect('blog:post_detail', pk=pk)
+class CommentDeleteView(CommentUpdateDeleteMixin, DeleteView):
+    pass

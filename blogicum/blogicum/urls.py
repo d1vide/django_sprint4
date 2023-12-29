@@ -22,6 +22,6 @@ urlpatterns = [
     ),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-handler404 = 'blog.views.page_not_found'
+handler404 = 'pages.views.page_not_found'
 
-handler500 = 'blog.views.internal_server'
+handler500 = 'pages.views.internal_server'

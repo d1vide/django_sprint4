@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth import get_user_model
 
 
+MAX_LENGTH = 256
+
 User = get_user_model()
 
 
@@ -15,10 +17,11 @@ class BaseModel(models.Model):
 
     class Meta:
         abstract = True
+        ordering = ['-pub_date', ]
 
 
 class Category(BaseModel):
-    title = models.CharField(max_length=256,
+    title = models.CharField(max_length=MAX_LENGTH,
                              verbose_name='Заголовок')
     description = models.TextField(verbose_name='Описание')
     slug = models.SlugField(unique=True,
@@ -36,7 +39,8 @@ class Category(BaseModel):
 
 
 class Location(BaseModel):
-    name = models.CharField(max_length=256, verbose_name='Название места')
+    name = models.CharField(max_length=MAX_LENGTH,
+                            verbose_name='Название места')
 
     class Meta:
         verbose_name = 'местоположение'
@@ -47,7 +51,7 @@ class Location(BaseModel):
 
 
 class Post(BaseModel):
-    title = models.CharField(max_length=256, verbose_name='Заголовок')
+    title = models.CharField(max_length=MAX_LENGTH, verbose_name='Заголовок')
     text = models.TextField(verbose_name='Текст')
     pub_date = models.DateTimeField(verbose_name='Дата и время публикации',
                                     help_text=('Если установить дату и время '
@@ -78,7 +82,6 @@ class Post(BaseModel):
     class Meta:
         verbose_name = 'публикация'
         verbose_name_plural = 'Публикации'
-        ordering = ['-pub_date', ]
 
     def __str__(self):
         return self.title
